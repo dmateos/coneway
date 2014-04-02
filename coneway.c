@@ -14,6 +14,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #include <GL/glew.h>
@@ -207,7 +208,7 @@ struct pool pool;
 static void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods) {
   switch(key) {
     case GLFW_KEY_ENTER:
-      (go == 0) ? (go = 1) : (go = 0);
+      (go == 0) ? (go = 1) : (go = 1);
       break;
       /* Sim speed  */
     case GLFW_KEY_P:
@@ -267,8 +268,7 @@ int main(int argc, char **argv) {
     /* Sets up a 'ortho' projection, ie no perspective. */
     /* now we use perspective. */
     glOrtho(0.0, (X*BSIZE), (Y*BSIZE), 0.0, -1.0, 1.0);
-    //glOrtho(0.0, 1.0, 1.0, 0.0, -1.0, 1.0);
-    //gluPerspective(0.0, (X*BSIZE)/(Y*BSIZE), 0.1, 100.0);
+    //gluPerspective(45.0f, (X*BSIZE)/(Y*BSIZE), 3.0f, 100.0f);
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
