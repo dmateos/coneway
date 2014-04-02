@@ -6,7 +6,7 @@ flags = -lglfw3 -lglew -lassimp -framework Cocoa -framework OpenGL -framework IO
 all: coneway
 
 coneway: $(objects)
-	$(CC) $(flags) `sdl-config --cflags --libs` -o $@ $(objects)
+	$(CC) $(flags) -o $@ $(objects)
 
 coneway.o: coneway.c
 	$(CC) -c -o $@ coneway.c
