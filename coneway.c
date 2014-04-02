@@ -287,8 +287,8 @@ int main(int argc, char **argv) {
           pool.gencount++;
       }
 
-     glClear(GL_COLOR_BUFFER_BIT);
-     draw_pool(&pool);
+      glClear(GL_COLOR_BUFFER_BIT);
+      draw_pool(&pool);
 
       /* Update title bar. */
       snprintf(wmtbuff, sizeof(wmtbuff),
