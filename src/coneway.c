@@ -1,7 +1,7 @@
-/** 
+/**
  * Coneway, Implementation of Conway's_Game_of_Life
  * Daniel Mateos, Sep 2009
- * 
+ *
  * To see if i could make a decent game of life over a day and a half and
  * hope its better than PDA's version that i havent seen yet.
  *
@@ -14,13 +14,16 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
-#include <SDL/SDL.h>
-#include <SDL/SDL_opengl.h>
 
-#define X 640
-#define Y 480
-#define BSIZE 2 /* Squared. */
+#include <GL/glew.h>
+#define GLFW_DLL
+#include <GLFW/glfw3.h>
+
+#define X 200
+#define Y 200
+#define BSIZE 4 /* Squared. */
 /* FG/BG color, rgb floats for openGL, 1.0 = max. */
 #define FGCOLOR 0, 0, 1.0
 #define BGCOLOR 1.0, 1.0, 1.0
@@ -28,12 +31,11 @@
 
 struct pool {
     char data[X][Y];
-    char dirty; /* To keep track of rendering updates. */
     int gencount;
 };
 
 void oshit(const struct pool *pool, char *msg, int fatal);
-int draw_pool(struct pool *pool, SDL_Surface *canvas);
+int draw_pool(struct pool *pool);
 int neighb_pool(const struct pool *pool, int cellx, int celly);
 int comp_pool(struct pool *pool);
 int rand_pool(struct pool *pool);
@@ -60,13 +62,11 @@ void oshit(const struct pool *pool, char *msg, int fatal) {
         exit(1);
 }
 
-int draw_pool(struct pool *pool, SDL_Surface *canvas) {
+int draw_pool(struct pool *pool) {
     int x, y, xmod, ymod;
 
-    /* Clear the screen and set the draw color. */
-    glClear(GL_COLOR_BUFFER_BIT);
-    glLoadIdentity();
-q    glColor3f(FGCOLOR);
+    //glLoadIdentity();
+    glColor3f(FGCOLOR);
 
     /* Render all the alive cells as quads. */
     glBegin(GL_QUADS);
@@ -75,19 +75,16 @@ q    glColor3f(FGCOLOR);
             xmod = x * BSIZE;
             ymod = y * BSIZE;
 
-            if(pool->data[x][y]) { 
-                glVertex2f(xmod, ymod);
-                glVertex2f(xmod+BSIZE, ymod);
-                glVertex2f(xmod+BSIZE, ymod+BSIZE);
-                glVertex2f(xmod, ymod+BSIZE);
+            if(pool->data[x][y]) {
+                glVertex3f(xmod, ymod, 0);
+                glVertex3f(xmod+BSIZE, ymod, 0);
+                glVertex3f(xmod+BSIZE, ymod+BSIZE, 0);
+                glVertex3f(xmod, ymod+BSIZE, 0);
             }
         }
     }
     glEnd();
 
-    /* Swap buffer and mark pool as clean. */
-    SDL_GL_SwapBuffers();
-    pool->dirty = 0;
     return 0;
 }
 
@@ -98,7 +95,7 @@ int neighb_pool(const struct pool *pool, int cellx, int celly) {
     if((cellx-1 >= 0) && pool->data[cellx-1][celly])
         ncount++;
     /* RIGHT */
-    if((cellx+1 < X) && pool->data[cellx+1][celly]) 
+    if((cellx+1 < X) && pool->data[cellx+1][celly])
         ncount++;
     /* UP */
     if((celly-1 >= 0) && pool->data[cellx][celly-1])
@@ -115,8 +112,8 @@ int neighb_pool(const struct pool *pool, int cellx, int celly) {
     /* DOWN LEFT */
     if((cellx-1 >= 0) && (celly+1 < Y) && pool->data[cellx-1][celly+1])
         ncount++;
-    /* DOWN RIGHT */ 
-    if((cellx+1 < X) && (celly+1 < Y) && pool->data[cellx+1][celly+1]) 
+    /* DOWN RIGHT */
+    if((cellx+1 < X) && (celly+1 < Y) && pool->data[cellx+1][celly+1])
         ncount++;
 
     return ncount;
@@ -127,7 +124,7 @@ int comp_pool(struct pool *pool) {
     struct pool poolstate;
     char *cdata;
 
-    /* snapshot the pool state to apply transformation from to sim all cells 
+    /* snapshot the pool state to apply transformation from to sim all cells
        reacting at once instead of to the modified active cells. */
     memcpy(&poolstate, pool, sizeof(poolstate));
 
@@ -140,24 +137,24 @@ int comp_pool(struct pool *pool) {
             printf("hits from %dx%d h:%d\n", x, y, neighb);
 #endif
             switch(neighbcount) {
-                /* Rule 1: Any live cell with fewer than two live neighbours 
+                /* Rule 1: Any live cell with fewer than two live neighbours
                    dies, as if caused by underpopulation. */
                 case 0:
                 case 1:
                     if(*cdata == 1)
                         *cdata = 0;
                     break;
-                /* Rule 3: Any live cell with two or three live neighbours 
+                /* Rule 3: Any live cell with two or three live neighbours
                  * lives on to the next generation. */
                 case 2:
                     break;
-                /* Rule 4: Any dead cell with exactly three live neighbours 
+                /* Rule 4: Any dead cell with exactly three live neighbours
                    becomes a live cell. */
                 case 3:
                     if(*cdata == 0)
                         *cdata = 1;
                     break;
-                /* Rule 2: Any live cell with more than three live neighbours 
+                /* Rule 2: Any live cell with more than three live neighbours
                    dies, as if by overcrowding. */
                 default:
                     if(*cdata == 1)
@@ -179,7 +176,6 @@ int rand_pool(struct pool *pool) {
             pool->data[x][y] = (rand() % 10 == 1);
 
     pool->gencount = 1;
-    pool->dirty = 1;
     return 0;
 }
 
@@ -201,120 +197,110 @@ void open_pool(struct pool *pool, char *filename) {
             memset(pool, 0, sizeof(*pool));
         }
         fclose(file);
-        pool->dirty = 1;
     }
 }
 
+int go, simspeed, mousex, mousey, zoom;
+struct pool pool;
+
+static void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods) {
+  switch(key) {
+    case GLFW_KEY_ENTER:
+      (go == 0) ? (go = 1) : (go = 1);
+      break;
+      /* Sim speed  */
+    case GLFW_KEY_P:
+      (simspeed+10 <= 2000) ? (simspeed += 10) : 0;
+      break;
+    case GLFW_KEY_O:
+     /* Had min speed as 0, runs fast but fucks up X
+     with title updates, NOTE: set back when font
+     engine written. */
+      (simspeed-10 >= 10) ? (simspeed -= 10) : 0;
+      break;
+    case GLFW_KEY_K:
+      memset(&pool, 0, sizeof(pool));
+      pool.gencount = 0;
+      break;
+    case GLFW_KEY_S:
+      save_pool(&pool, "pool.cone");
+      break;
+    case GLFW_KEY_L:
+      open_pool(&pool, "pool.cone");
+      pool.gencount = 0;
+      break;
+    case GLFW_KEY_R:
+      rand_pool(&pool);
+      break;
+    default:
+      break;
+  }
+}
+
 int main(int argc, char **argv) {
-    int go, simspeed, mainloop, mousex, mousey;
-    struct pool pool;
     char wmtbuff[150], mousemask;
-    SDL_Surface *display;
-    SDL_Event event;
+
+    if(!glfwInit()) {
+      fprintf(stderr, "error: could not start glfw3");
+    }
 
     go = 0;
-    mainloop = 1;
     simspeed = 50;
     memset(&pool, 0, sizeof(pool));
-    pool.dirty =1;
+    zoom = -50.0;
 
-    /* Init SDL, display and openGL. */
-    if(SDL_Init(SDL_INIT_VIDEO) < 0)
-        oshit(&pool, "SDL video init.", 1);
+    GLFWwindow *window = glfwCreateWindow(X*BSIZE, Y*BSIZE, "coneway", NULL, NULL);
+    glfwSetKeyCallback(window, key_callback);
+    glfwMakeContextCurrent(window);
 
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    
-    if(!(display = SDL_SetVideoMode(X*BSIZE, Y*BSIZE, 16, SDL_OPENGL)))
-        oshit(&pool, "SDL Screen mode set", 1);
+    glewExperimental = GL_TRUE;
+    glewInit();
 
     /* opengl 2d init stuff. */
     glEnable(GL_TEXTURE_2D);
-    glDisable(GL_DEPTH_TEST);
-    glViewport(0, 0, X*BSIZE, Y*BSIZE);
+    glClearDepth(1.0);
+    glDepthFunc(GL_LEQUAL);
+    //glDisable(GL_DEPTH_TEST);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     /* Sets up a 'ortho' projection, ie no perspective. */
-    glOrtho(0.0, X*BSIZE, Y*BSIZE, 0.0, -1.0, 1.0);
+    /* now we use perspective. */
+    glOrtho(0.0, (X*BSIZE), (Y*BSIZE), 0.0, -1.0, 1.0);
+    //gluPerspective(45.0f, (X*BSIZE)/(Y*BSIZE), 3.0f, 100.0f);
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
+    /* Setup the scale and translate the GL 0.0 mid coords to our 0.0
+       top left based coords. */
+    //glScalef(2.0 / (X*BSIZE), -2.0 / (Y*BSIZE), 0.0);
+    //glTranslatef(-((X*BSIZE)/2.0), -((Y*BSIZE)/2.0), 0.0);
     glClearColor(1.0, 1.0, 1.0, 0);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glViewport(0, 0, X*BSIZE, Y*BSIZE);
 
-    while(mainloop) {
-        /* If go, comp the pool and render it. */
-        if(go) {
-            comp_pool(&pool);
-            pool.dirty = 1;
-            pool.gencount++;
-        }
+    while(!glfwWindowShouldClose(window)) {
 
-        /* user io capture. */
-        while(SDL_PollEvent(&event)) {
-            switch(event.type) {
-                case SDL_QUIT:
-                    mainloop = 0;
-                    break;
-                case SDL_MOUSEBUTTONDOWN:
-                    mousemask = SDL_GetMouseState(&mousex, &mousey);
-                    if(mousemask & SDL_BUTTON(1))
-                        pool.data[mousex/BSIZE][mousey/BSIZE] = 1;
-                    else if(mousemask & SDL_BUTTON(3))
-                        pool.data[mousex/BSIZE][mousey/BSIZE] = 0;
-                    pool.dirty = 1;
-                    break;
-                case SDL_KEYDOWN:
-                    switch(event.key.keysym.sym) {
-                        case SDLK_q:
-                            mainloop = 0; 
-                            break;
-                        /* Pause/Go */
-                        case SDLK_RETURN:
-                            (go == 0) ? (go = 1) : (go = 0);
-                            break;
-                        /* Sim speed  */
-                        case SDLK_p:
-                            (simspeed+10 <= 2000) ? (simspeed += 10) : 0;
-                            break;
-                        case SDLK_o:
-                            /* Had min speed as 0, runs fast but fucks up X 
-                               with title updates, NOTE: set back when font
-                               engine written. */
-                            (simspeed-10 >= 10) ? (simspeed -= 10) : 0;
-                            break;
-                        case SDLK_c:
-                            memset(&pool, 0, sizeof(pool));
-                            pool.dirty = 1;
-                            pool.gencount = 0;
-                            break;
-                        case SDLK_s:
-                            save_pool(&pool, "pool.cone");
-                            break;
-                        case SDLK_l:
-                            open_pool(&pool, "pool.cone");
-                            pool.gencount = 0;
-                            break;
-                        case SDLK_r:
-                            rand_pool(&pool);
-                        default:
-                            break;
-                    }
-                break;
-            }
-        }
-        /* If dirty, render the pool. */
-        if(pool.dirty)
-            draw_pool(&pool, display);
-        
-        /* Update title bar. */
-        snprintf(wmtbuff, sizeof(wmtbuff),
-                "Coneway - %dx%d - Gen: %d, Delay: %dms, Running: %s",
-                 X, Y, pool.gencount, simspeed, go ? "True" : "False");
-        SDL_WM_SetCaption(wmtbuff, NULL);
+      /* If go, comp the pool and render it. */
+      if(go) {
+          comp_pool(&pool);
+          pool.gencount++;
+      }
 
-        /* If going we delay by user spec if not 10ms so editing isnt laggy. */
-        (go) ? SDL_Delay(simspeed) : SDL_Delay(10);
-    }
-    SDL_Quit();
-    return 0;
+      glClear(GL_COLOR_BUFFER_BIT);
+      draw_pool(&pool);
+
+      /* Update title bar. */
+      snprintf(wmtbuff, sizeof(wmtbuff),
+              "Coneway - %dx%d - Gen: %d, Delay: %dms, Running: %s",
+               X, Y, pool.gencount, simspeed, go ? "True" : "False");
+      //SDL_WM_SetCaption(wmtbuff, NULL);
+
+      /* If going we delay by user spec if not 10ms so editing isnt laggy. */
+      //(go) ? sleep(simspeed) : sleep(1);
+
+      glfwPollEvents();
+      glfwSwapBuffers(window);
+  }
+
+  glfwTerminate();
+  return 0;
 }
