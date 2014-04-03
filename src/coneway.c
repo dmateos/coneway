@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 #include <GL/glew.h>
 #define GLFW_DLL
@@ -295,7 +296,7 @@ int main(int argc, char **argv) {
       //SDL_WM_SetCaption(wmtbuff, NULL);
 
       /* If going we delay by user spec if not 10ms so editing isnt laggy. */
-      //(go) ? sleep(simspeed) : sleep(1);
+      (go) ? usleep(simspeed*1000) : usleep(1);
 
       glfwPollEvents();
       glfwSwapBuffers(window);
